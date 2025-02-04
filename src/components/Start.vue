@@ -23,8 +23,9 @@
       <div v-else-if="currentStep === 'start'" class="start-survey-container">
         <h2>
           Bonjour,<br />
-          pour mieux connaître les usagers de la gare de Lognes la SNCF
-          souhaiteraient en savoir plus sur votre déplacement en cours.<br />
+          pour mieux connaître les usagers de la gare de Lognes. <br />
+          EpaMarne et la SNCF souhaiteraient en savoir plus sur votre
+          déplacement en cours.<br />
           Auriez-vous quelques secondes à nous accorder ? 
         </h2>
         <h2></h2>
@@ -109,16 +110,34 @@
           <!-- Free Text Questions -->
           <div v-if="currentQuestion.freeText">
             <div class="input-container">
-              <input
+              <!-- Special handling for Q4 with hours and minutes -->
+              <div
                 v-if="['Q4'].includes(currentQuestion.id)"
-                v-model="freeTextAnswer"
-                class="form-control"
-                type="number"
-                :placeholder="
-                  currentQuestion.freeTextPlaceholder ||
-                  'Votre réponse en minutes'
-                "
-              />
+                class="time-input-container"
+              >
+                <div class="time-input-group">
+                  <input
+                    v-model="hoursAnswer"
+                    class="form-control time-input"
+                    type="number"
+                    min="0"
+                    placeholder="Heures"
+                  />
+                  <span class="time-label">h</span>
+                </div>
+                <div class="time-input-group">
+                  <input
+                    v-model="minutesAnswer"
+                    class="form-control time-input"
+                    type="number"
+                    min="0"
+                    max="59"
+                    placeholder="Minutes"
+                  />
+                  <span class="time-label">min</span>
+                </div>
+              </div>
+              <!-- Other free text questions remain unchanged -->
               <input
                 v-else
                 v-model="freeTextAnswer"
@@ -132,7 +151,7 @@
             <button
               @click="handleFreeTextAnswer"
               class="btn-next"
-              :disabled="!freeTextAnswer"
+              :disabled="!isValidTimeInput"
             >
               {{ isLastQuestion ? "Terminer" : "Suivant" }}
             </button>
@@ -216,6 +235,22 @@ const counterDocRef = doc(db, "counterBusTrain", "surveyCounter");
 const gareSelections = ref({});
 const savedPoste = ref(null);
 const firstQuestion = questions.find((q) => q.id === "Poste");
+
+// Add new refs for hours and minutes
+const hoursAnswer = ref("");
+const minutesAnswer = ref("");
+
+// Add computed property to check if time input is valid
+const isValidTimeInput = computed(() => {
+  if (currentQuestion.value?.id === "Q4") {
+    return (
+      (hoursAnswer.value !== "" || minutesAnswer.value !== "") &&
+      (!minutesAnswer.value ||
+        (minutesAnswer.value >= 0 && minutesAnswer.value <= 59))
+    );
+  }
+  return freeTextAnswer.value !== "";
+});
 
 const handleGareSelection = () => {
   if (currentQuestion.value.usesGareSelector) {
@@ -375,7 +410,21 @@ const selectAnswer = (option) => {
 const handleFreeTextAnswer = () => {
   if (currentQuestion.value) {
     const questionId = currentQuestion.value.id;
-    answers.value[questionId] = freeTextAnswer.value;
+
+    if (questionId === "Q4") {
+      // Convert hours and minutes to total minutes
+      const hours = parseInt(hoursAnswer.value) || 0;
+      const minutes = parseInt(minutesAnswer.value) || 0;
+      const totalMinutes = hours * 60 + minutes;
+      answers.value[questionId] = totalMinutes.toString();
+
+      // Reset the inputs
+      hoursAnswer.value = "";
+      minutesAnswer.value = "";
+    } else {
+      answers.value[questionId] = freeTextAnswer.value;
+      freeTextAnswer.value = "";
+    }
 
     if (
       currentQuestion.value.next === "end" ||
@@ -385,7 +434,6 @@ const handleFreeTextAnswer = () => {
     } else {
       nextQuestion();
     }
-    freeTextAnswer.value = ""; // Reset the free text answer
   }
 };
 
@@ -816,5 +864,31 @@ h2 {
 .precision-input h3 {
   font-size: 1.1em;
   margin-bottom: 10px;
+}
+
+/* Add these new styles */
+.time-input-container {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.time-input-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.time-input {
+  width: 100px !important;
+  text-align: center;
+}
+
+.time-label {
+  color: white;
+  font-size: 16px;
 }
 </style>
